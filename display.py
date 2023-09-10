@@ -33,7 +33,7 @@ def index():
     </html>
     """
 
-@app.route('/video')
+@app.route('/luffy.jpg')
 def view_image():
     return send_file(eight_bit_image_path, mimetype='image/png')
 
