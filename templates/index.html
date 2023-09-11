@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MJPEG Video Stream</title>
+</head>
+<body>
+    <h1>MJPEG Video Stream</h1>
+    <img id="video" src="" alt="Video Stream" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.2.0/socket.io.js"></script>
+    <script>
+        const socket = io.connect('http://' + 192.168.1.4 + ':5000');
+
+        socket.on('connect', () => {
+            console.log('Connected to WebSocket');
+            socket.emit('subscribe', { topic: 'video_stream' });
+        });
+
+        socket.on('video_frame', (data) => {
+            const video = document.getElementById('video');
+            video.src = 'data:image/jpeg;base64,' + data.frame;
+        });
+    </script>
+</body>
+</html>

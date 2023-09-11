@@ -2,3 +2,5 @@ opencv-python-headless
 flask
 moviepy
 pydub
+websockets
+Flask-SocketIO
