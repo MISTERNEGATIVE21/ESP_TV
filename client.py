@@ -2,6 +2,8 @@ import asyncio
 import websockets
 import cv2
 import numpy as np
+from PIL import Image
+import io
 
 # Define the target resolution
 target_width = 160
@@ -27,14 +29,17 @@ async def send_mjpeg_frames():
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             frame = cv2.applyColorMap(frame, cv2.COLORMAP_JET)
 
-            # Convert the frame to MJPEG format
-            _, buffer = cv2.imencode('.jpg', frame)
-            jpg_bytes = buffer.tobytes()
+            # Convert the frame to PIL Image format
+            pil_image = Image.fromarray(frame)
 
-            # Send the MJPEG frame over WebSocket
-            await websocket.send(jpg_bytes)
+            # Convert the PIL Image to PIX format (byte buffer)
+            pix_buffer = io.BytesIO()
+            pil_image.save(pix_buffer, format='PIX')
+
+            # Send the PIX frame over WebSocket
+            await websocket.send(pix_buffer.getvalue())
 
             # Wait for 5 seconds before sending the next frame
-            await asyncio.sleep(6)
+            await asyncio.sleep(5)
 
 asyncio.get_event_loop().run_until_complete(send_mjpeg_frames())
