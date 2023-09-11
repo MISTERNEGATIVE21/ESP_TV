@@ -4,3 +4,4 @@ moviepy
 pydub
 websockets
 Flask-SocketIO
+gevent-websocket
