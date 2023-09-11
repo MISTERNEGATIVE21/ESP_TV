@@ -1,45 +1,38 @@
+import cv2
 import asyncio
 import websockets
-import cv2
-import numpy as np
-from PIL import Image
 import io
 
-# Define the target resolution
-target_width = 160
-target_height = 128
-color_depth = 256  # 8-bit color depth
+# Replace './test.mp4' with the path to your video file
+#video_path = './mini.3gp'
+video_path = './test.mp4'
+cap = cv2.VideoCapture(video_path)
 
-async def send_mjpeg_frames():
-    cap = cv2.VideoCapture('./test.mp4')
-    if not cap.isOpened():
-        print("Error: Could not open video file")
-        return
+# Define the desired FPS
+desired_fps = 15
 
-    async with websockets.connect('ws://192.168.1.4:8888') as websocket:
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+async def send_frames(websocket, path):
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
 
-            # Resize the frame to the target resolution (160x128)
-            frame = cv2.resize(frame, (target_width, target_height))
+        # Resize the frame to 160x120
+        frame = cv2.resize(frame, (160, 120))
 
-            # Convert the frame to 8-bit color depth
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            frame = cv2.applyColorMap(frame, cv2.COLORMAP_JET)
+        # Encode the frame as PIX-JPEG
+        _, buffer = cv2.imencode('.jpeg', frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
 
-            # Convert the frame to PIL Image format
-            pil_image = Image.fromarray(frame)
+        # Convert the frame to binary
+        frame_bytes = buffer.tobytes()
 
-            # Convert the PIL Image to PIX format (byte buffer)
-            pix_buffer = io.BytesIO()
-            pil_image.save(pix_buffer, format='PIX')
+        await websocket.send(frame_bytes)
 
-            # Send the PIX frame over WebSocket
-            await websocket.send(pix_buffer.getvalue())
+        # Calculate the delay required to achieve the desired FPS
+        await asyncio.sleep(1 / desired_fps)
 
-            # Wait for 5 seconds before sending the next frame
-            await asyncio.sleep(5)
+if __name__ == "__main__":
+    start_server = websockets.serve(send_frames, "0.0.0.0", 8888)
 
-asyncio.get_event_loop().run_until_complete(send_mjpeg_frames())
+    asyncio.get_event_loop().run_until_complete(start_server)
+    asyncio.get_event_loop().run_forever()

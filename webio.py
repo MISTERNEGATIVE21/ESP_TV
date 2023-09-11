@@ -1,53 +1,45 @@
-from flask import Flask, render_template, Response
-from geventwebsocket.handler import WebSocketHandler
-from gevent.pywsgi import WSGIServer
+from flask import Flask, render_template
+from flask_socketio import SocketIO, emit
 import cv2
-import time  # Import the time module
+import base64
+import threading
 
 app = Flask(__name__)
+socketio = SocketIO(app)
 
-# Replace './test.mp4' with the path to your video file
-video_path = './test.mp4'
+# Global variable to hold the video capture
+video_capture = None
 
-cap = cv2.VideoCapture(video_path)
+def video_stream():
+    global video_capture
+    if not video_capture:
+        video_capture = cv2.VideoCapture('./mini.3gp')  # Use the test.mp4 file as the video source
 
-# Define the desired FPS
-desired_fps = 15
+    while True:
+        success, frame = video_capture.read()
+        if not success:
+            break
 
-@app.route('/')
+        # Convert the frame to JPEG format
+        _, buffer = cv2.imencode('.jpg', frame)
+        frame_data = base64.b64encode(buffer).decode('utf-8')
+
+        # Send the frame to all connected clients
+        socketio.emit('video_frame', frame_data)
+
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected')
+    if not video_capture:
+        threading.Thread(target=video_stream).start()
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('Client disconnected')
+
+@app.route('/video')
 def index():
     return render_template('index.html')
 
-def generate_frames():
-    while True:
-        # Get the start time for measuring FPS
-        start_time = time.time()
-        
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        # Resize the frame to 160x120
-        frame = cv2.resize(frame, (160, 120))
-
-        # Encode the frame as JPEG
-        _, buffer = cv2.imencode('.jpg', frame)
-        frame = buffer.tobytes()
-
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-
-        # Calculate the time taken for processing the frame
-        elapsed_time = time.time() - start_time
-
-        # Calculate the delay required to achieve the desired FPS
-        delay = max(0, 1 / desired_fps - elapsed_time)
-        time.sleep(delay)
-
-@app.route('/video_stream')
-def video_stream():
-    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-if __name__ == "__main__":
-    http_server = WSGIServer(("0.0.0.0", 5000), app, handler_class=WebSocketHandler)
-    http_server.serve_forever()
+if __name__ == '__main__':
+    socketio.run(app, debug=True, host='0.0.0.0', port=8888)

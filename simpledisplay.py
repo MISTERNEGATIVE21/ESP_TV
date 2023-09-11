@@ -2,7 +2,7 @@ import http.server
 import socketserver
 
 # Define the directory containing your JPEG image (current directory)
-image_directory = "./luffy.jpg"
+image_directory = "./luffy.jpeg"
 
 # Set the IP address and port for the server
 ip = "0.0.0.0"  # Listen on all available network interfaces

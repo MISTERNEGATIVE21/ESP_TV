@@ -1,27 +1,27 @@
-import cv2
-import numpy as np
-import websocket
+import asyncio
+import websockets
+import binascii
 
-# Define the WebSocket server URL (replace with your server's IP and port)
-server_url = "ws://your_server_ip:8756"
+# Function to serve an image to connected clients as a hexadecimal string
+async def serve_image(websocket, path):
+    try:
+        # Open the image file and read its binary data
+        with open("./luffy.jpeg", "rb") as image_file:
+            image_data = image_file.read()
+        
+        # Convert binary image data to a hexadecimal string
+        hex_image_data = binascii.hexlify(image_data).decode('utf-8')
+        
+        # Send the hexadecimal image data to the client
+        await websocket.send(hex_image_data)
+    except FileNotFoundError:
+        print("Image file not found.")
 
-# Initialize OpenCV window for displaying the video stream
-cv2.namedWindow("Video Stream", cv2.WINDOW_NORMAL)
+# Create and start the WebSocket server
+async def main():
+    server = await websockets.serve(serve_image, "0.0.0.0", 8888)  # Listen on all available network interfaces
 
-def on_message(ws, message):
-    # Decode the received data as JPEG and display it using OpenCV
-    jpg_data = np.frombuffer(message, dtype=np.uint8)
-    frame = cv2.imdecode(jpg_data, cv2.IMREAD_COLOR)
-    cv2.imshow("Video Stream", frame)
-    cv2.waitKey(1)
+    await server.wait_closed()
 
 if __name__ == "__main__":
-    # Initialize the WebSocket client
-    ws = websocket.WebSocketApp(server_url, on_message=on_message)
-    
-    try:
-        ws.run_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        cv2.destroyAllWindows()
+    asyncio.run(main())
