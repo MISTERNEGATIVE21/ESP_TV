@@ -1,30 +1,39 @@
-from flask import Flask, render_template
-from flask_socketio import SocketIO, emit
+from flask import Flask, render_template, Response
+from geventwebsocket.handler import WebSocketHandler
+from gevent.pywsgi import WSGIServer
 import cv2
-import numpy as np
 
 app = Flask(__name__)
-socketio = SocketIO(app)
+
+# Replace './test.mp4' with the path to your video file
+video_path = './test.mp4'
+
+cap = cv2.VideoCapture(video_path)
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-cap = cv2.VideoCapture('./test.mp4')  # Replace with your video file path
-
-def video_stream():
+def generate_frames():
     while True:
         ret, frame = cap.read()
         if not ret:
             break
+
+        # Resize the frame to 160x120
+        frame = cv2.resize(frame, (160, 120))
+
+        # Encode the frame as JPEG
         _, buffer = cv2.imencode('.jpg', frame)
-        jpg_data = buffer.tobytes()
+        frame = buffer.tobytes()
+
         yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + jpg_data + b'\r\n')
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
-@socketio.on('connect')
-def handle_connect():
-    emit('video_stream', broadcast=True)
+@app.route('/video_stream')
+def video_stream():
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-if __name__ == '__main__':
-    socketio.run(app, debug=True)
+if __name__ == "__main__":
+    http_server = WSGIServer(("0.0.0.0", 5000), app, handler_class=WebSocketHandler)
+    http_server.serve_forever()
