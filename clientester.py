@@ -1,27 +1,36 @@
 import asyncio
 import websockets
-import binascii
+import cv2
+import numpy as np
+import io
 
-# Function to serve an image to connected clients as a hexadecimal string
-async def serve_image(websocket, path):
-    try:
-        # Open the image file and read its binary data
-        with open("./luffy.jpeg", "rb") as image_file:
-            image_data = image_file.read()
-        
-        # Convert binary image data to a hexadecimal string
-        hex_image_data = binascii.hexlify(image_data).decode('utf-8')
-        
-        # Send the hexadecimal image data to the client
-        await websocket.send(hex_image_data)
-    except FileNotFoundError:
-        print("Image file not found.")
+# Define the target resolution
+target_width = 160
+target_height = 128
 
-# Create and start the WebSocket server
-async def main():
-    server = await websockets.serve(serve_image, "0.0.0.0", 8888)  # Listen on all available network interfaces
+async def send_jpeg_frames():
+    cap = cv2.VideoCapture('./test.mp4')
+    if not cap.isOpened():
+        print("Error: Could not open video file")
+        return
 
-    await server.wait_closed()
+    async with websockets.connect('ws://192.168.4.1:8888') as websocket:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-if __name__ == "__main__":
-    asyncio.run(main())
+            # Resize the frame to the target resolution (160x128)
+            frame = cv2.resize(frame, (target_width, target_height))
+
+            # Convert the frame to JPEG format
+            _, buffer = cv2.imencode('.jpg', frame)
+            jpeg_bytes = buffer.tobytes()
+
+            # Send the JPEG frame over WebSocket
+            await websocket.send(jpeg_bytes)
+
+            # Wait for 5 seconds before sending the next frame
+            await asyncio.sleep(5)
+
+asyncio.get_event_loop().run_until_complete(send_jpeg_frames())

@@ -1,45 +1,65 @@
-from flask import Flask, render_template
-from flask_socketio import SocketIO, emit
 import cv2
-import base64
-import threading
+import asyncio
+import websockets
+import time
+import io
 
-app = Flask(__name__)
-socketio = SocketIO(app)
+# Replace with the path to your video file
+video_source = "./test.mp4"
 
-# Global variable to hold the video capture
-video_capture = None
+# Target frame rate (frames per second)
+target_fps = 5
 
-def video_stream():
-    global video_capture
-    if not video_capture:
-        video_capture = cv2.VideoCapture('./mini.3gp')  # Use the test.mp4 file as the video source
+# Define the target dimensions
+target_width = 160
+target_height = 128
+
+# Frame skip interval (skip every N frames)
+frame_skip_interval = 5  # Change this value as needed
+
+# JPEG quality and color format
+jpeg_quality = 12
+color_format = cv2.COLOR_BGR2RGB  # Convert to RGB format
+
+async def generate_frames(websocket, path):
+    cap = cv2.VideoCapture(video_source)
+    frame_delay = 1.0 / target_fps
+    frame_count = 0
 
     while True:
-        success, frame = video_capture.read()
-        if not success:
+        start_time = time.time()
+
+        ret, frame = cap.read()
+
+        if not ret:
             break
 
-        # Convert the frame to JPEG format
-        _, buffer = cv2.imencode('.jpg', frame)
-        frame_data = base64.b64encode(buffer).decode('utf-8')
+        frame_count += 5
 
-        # Send the frame to all connected clients
-        socketio.emit('video_frame', frame_data)
+        # Skip frames based on the frame_skip_interval
+        if frame_count % frame_skip_interval != 0:
+            continue
 
-@socketio.on('connect')
-def handle_connect():
-    print('Client connected')
-    if not video_capture:
-        threading.Thread(target=video_stream).start()
+        # Resize the frame to the target dimensions
+        frame = cv2.resize(frame, (target_width, target_height))
 
-@socketio.on('disconnect')
-def handle_disconnect():
-    print('Client disconnected')
+        # Convert the frame to RGB format (if not already)
+        frame = cv2.cvtColor(frame, color_format)
 
-@app.route('/video')
-def index():
-    return render_template('index.html')
+        # Encode the frame to JPEG format with the specified quality
+        _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
 
-if __name__ == '__main__':
-    socketio.run(app, debug=True, host='0.0.0.0', port=8888)
+        # Send the frame to the WebSocket client
+        await websocket.send(buffer.tobytes())
+
+        # Calculate elapsed time and introduce a delay to achieve the target FPS
+        elapsed_time = time.time() - start_time
+        if elapsed_time < frame_delay:
+            await asyncio.sleep(frame_delay - elapsed_time)
+
+    cap.release()
+
+start_server = websockets.serve(generate_frames, "0.0.0.0", 8888)
+
+asyncio.get_event_loop().run_until_complete(start_server)
+asyncio.get_event_loop().run_forever()
