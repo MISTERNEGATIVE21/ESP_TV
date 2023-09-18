@@ -1,6 +1,6 @@
 import cv2
 from PIL import Image, ImageDraw, ImageFont
-
+import numpy as np
 # Define ASCII characters to represent intensity levels
 ascii_chars = '@%#*+=-:. '
 
@@ -23,10 +23,10 @@ def frame_to_ascii(frame):
     for y in range(60):
         for x in range(80):
             # Get the intensity of the pixel in the grayscale frame
-            intensity = gray_frame[y * cell_height, x * cell_width]
+            intensity = gray_frame[y, x]  # Fix indexing here
 
             # Map the intensity to an ASCII character
-            ascii_char = ascii_chars[intensity // 25]
+            ascii_char = ascii_chars[int(intensity / 25)]
 
             # Draw the ASCII character on the frame
             draw.text((x * cell_width, y * cell_height), ascii_char, fill="white", font=font)
